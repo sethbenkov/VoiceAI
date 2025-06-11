@@ -1,7 +1,8 @@
-openai>=1.0.0
-pvporcupine==2.1.0
-pyaudio==0.2.13
-python-dotenv>=1.0.0
-numpy>=1.19.0
-sounddevice>=0.4.5
-SpeechRecognition>=3.10.0 
+openai
+pvporcupine
+pyaudio
+python-dotenv
+numpy
+sounddevice
+SpeechRecognition
+requests 
