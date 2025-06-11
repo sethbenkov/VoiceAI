@@ -1,8 +1,0 @@
-openai
-pvporcupine
-pyaudio
-python-dotenv
-numpy
-sounddevice
-SpeechRecognition
-requests 
