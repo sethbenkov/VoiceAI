@@ -3,10 +3,10 @@
 Pixel 5 Voice Assistant
 -----------------------
 This script implements a privacy-first voice assistant that runs on a Pixel 5 device.
-It uses offline wake word detection and speech-to-text, then connects to OpenAI for responses.
+It uses offline wake word detection and Google's Speech Recognition, then connects to OpenAI for responses.
 
-Author: Your Name
-Date: 2024
+Author: Seth Benkov
+Date: 2025
 """
 
 import os
@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 
 # Third-party imports
 import openai
-from vosk import Model, KaldiRecognizer
+import speech_recognition as sr
 import pvporcupine
 import pyaudio
 
@@ -45,7 +45,6 @@ class VoiceAssistant:
     def setup_paths(self) -> None:
         """Set up all necessary file paths and ensure they exist."""
         self.base_dir = Path.home() / "assistant"
-        self.vosk_model_dir = self.base_dir / "vosk-model"
         self.token_log = self.base_dir / "tokens.log"
         self.model_cache = self.base_dir / "models_cache.json"
         self.model_file = self.base_dir / ".assistant_model"
@@ -53,7 +52,6 @@ class VoiceAssistant:
         
         # Create directories if they don't exist
         self.base_dir.mkdir(exist_ok=True)
-        self.vosk_model_dir.mkdir(exist_ok=True)
         
     def load_config(self) -> None:
         """Load configuration and API keys."""
@@ -82,14 +80,8 @@ class VoiceAssistant:
                 keywords=["hey assistant"]
             )
             
-            # Initialize Vosk for speech recognition
-            if not (self.vosk_model_dir / "model").exists():
-                raise FileNotFoundError(
-                    "Vosk model not found. Please download it to ~/assistant/vosk-model"
-                )
-            
-            self.vosk_model = Model(str(self.vosk_model_dir / "model"))
-            self.recognizer = KaldiRecognizer(self.vosk_model, 16000)
+            # Initialize Speech Recognition
+            self.recognizer = sr.Recognizer()
             
             # Initialize PyAudio
             self.audio = pyaudio.PyAudio()
@@ -147,10 +139,16 @@ class VoiceAssistant:
         Returns None if no speech detected.
         """
         try:
-            data = self.stream.read(1024)
-            if self.recognizer.AcceptWaveform(data):
-                result = json.loads(self.recognizer.Result())
-                return result.get("text", "").strip()
+            with sr.Microphone() as source:
+                logger.info("Listening...")
+                audio = self.recognizer.listen(source)
+                text = self.recognizer.recognize_google(audio)
+                return text.strip()
+        except sr.UnknownValueError:
+            logger.info("Could not understand audio")
+            return None
+        except sr.RequestError as e:
+            logger.error(f"Could not request results; {e}")
             return None
         except Exception as e:
             logger.error(f"Error processing audio: {e}")
