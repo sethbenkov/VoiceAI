@@ -4,6 +4,15 @@ plugins {
     id 'kotlin-kapt'
 }
 
+kapt {
+    javacOptions {
+        option("-Xmaxerrs", 500)
+    }
+    arguments {
+        arg("kapt.kotlin.generated", "$buildDir/generated/source/kapt/main")
+    }
+}
+
 android {
     namespace 'com.sethbenkov.voiceai'
     compileSdk 34
