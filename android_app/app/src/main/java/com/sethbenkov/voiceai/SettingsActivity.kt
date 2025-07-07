@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.sethbenkov.voiceai.databinding.ActivitySettingsBinding
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
@@ -40,10 +39,27 @@ class SettingsActivity : AppCompatActivity() {
         binding.saveButton.setOnClickListener {
             saveSettings()
         }
+        binding.wakeWordSwitch.setOnCheckedChangeListener { _, isChecked ->
+            encryptedPrefs.edit().putBoolean("wake_word_enabled", isChecked).apply()
+            if (isChecked) {
+                // Start WakeWordService
+                val intent = android.content.Intent(this, WakeWordService::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            } else {
+                // Stop WakeWordService
+                val intent = android.content.Intent(this, WakeWordService::class.java)
+                stopService(intent)
+            }
+        }
     }
 
     private fun loadSettings() {
         binding.apiKeyInput.setText(encryptedPrefs.getString("api_key", ""))
+        binding.wakeWordSwitch.isChecked = encryptedPrefs.getBoolean("wake_word_enabled", false)
     }
 
     private fun saveSettings() {
@@ -61,6 +77,8 @@ class SettingsActivity : AppCompatActivity() {
 
         // Update the service with new API key
         (application as? VoiceAIApplication)?.assistantService?.setApiKey(apiKey)
+        // Also reload the key from secure storage in case it was changed elsewhere
+        (application as? VoiceAIApplication)?.assistantService?.loadApiKey()
 
         Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
         finish()

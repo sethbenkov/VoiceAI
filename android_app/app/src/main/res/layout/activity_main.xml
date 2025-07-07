@@ -55,14 +55,24 @@
         android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- Start/Stop Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/startButton"
+        <!-- Start/Stop Toggle Button -->
+        <ToggleButton
+            android:id="@+id/listenToggleButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Start"
+            android:textOn="Listening"
+            android:textOff="Not Listening"
             android:layout_marginEnd="8dp"
             style="@style/Widget.MaterialComponents.Button" />
+
+        <!-- Token Usage Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/usageButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Token Usage"
+            android:layout_marginStart="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 
         <!-- Settings Button -->
         <com.google.android.material.button.MaterialButton

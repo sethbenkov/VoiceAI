@@ -7,6 +7,14 @@ plugins {
 kapt {
     javacOptions {
         option("-Xmaxerrs", 500)
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED")
+        option("--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED")
     }
     arguments {
         arg("kapt.kotlin.generated", "$buildDir/generated/source/kapt/main")
@@ -54,6 +62,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Security
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     
     // Room Database
     implementation 'androidx.room:room-runtime:2.6.1'

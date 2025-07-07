@@ -13,11 +13,40 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.sethbenkov.voiceai.databinding.ActivityMainBinding
 import com.sethbenkov.voiceai.services.AssistantService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import android.content.ServiceConnection
+import android.os.IBinder
+import android.os.Build
+import android.content.ComponentName
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.ToggleButton
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var speechRecognizer: SpeechRecognizer
     private var isListening = false
+    private var assistantService: AssistantService? = null
+    private var isServiceBound = false
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as? AssistantService.LocalBinder
+            assistantService = binder?.getService()
+            isServiceBound = true
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            assistantService = null
+            isServiceBound = false
+        }
+    }
+    private val silenceTimeoutMillis = 5000L // 5 seconds of silence
+    private val silenceHandler = Handler(Looper.getMainLooper())
+    private val silenceRunnable = Runnable {
+        stopListening()
+        showToast("Stopped listening due to silence.")
+    }
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 123
@@ -31,6 +60,16 @@ class MainActivity : AppCompatActivity() {
         setupSpeechRecognizer()
         setupUI()
         checkPermissions()
+
+        // Start the AssistantService as a foreground service
+        val serviceIntent = Intent(this, AssistantService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(this, serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+        // Bind to the service
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
     private fun setupSpeechRecognizer() {
@@ -46,15 +85,56 @@ class MainActivity : AppCompatActivity() {
                 if (!matches.isNullOrEmpty()) {
                     val text = matches[0]
                     binding.userInputText.text = text
-                    // TODO: Send to OpenAI and get response
+                    // Show loading indicator
+                    binding.statusText.text = "Thinking..."
+                    // Use the bound AssistantService instance
+                    if (assistantService != null && isServiceBound) {
+                        lifecycleScope.launch {
+                            val result = assistantService!!.getResponse(text)
+                            if (result.isSuccess) {
+                                binding.userInputText.text = result.getOrNull()
+                                binding.statusText.text = "Ready"
+                                binding.assistantResponseText.text = result.getOrNull()
+                            } else {
+                                binding.userInputText.text = "Error: ${result.exceptionOrNull()?.localizedMessage ?: "Unknown error"}"
+                                binding.statusText.text = "Error"
+                                showToast("Assistant error: ${result.exceptionOrNull()?.localizedMessage ?: "Unknown error"}")
+                            }
+                        }
+                    } else {
+                        binding.userInputText.text = "Service not available"
+                        binding.statusText.text = "Error"
+                        showToast("Assistant service not available")
+                    }
                 }
                 isListening = false
-                binding.statusText.text = "Ready"
+                // Don't set statusText here, coroutine will update it
+                // Remove silence timeout
+                silenceHandler.removeCallbacks(silenceRunnable)
+                // Reset toggle button
+                binding.listenToggleButton.isChecked = false
             }
 
             override fun onError(error: Int) {
                 isListening = false
-                binding.statusText.text = "Error: $error"
+                val errorMsg = when (error) {
+                    SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+                    SpeechRecognizer.ERROR_CLIENT -> "Client side error"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
+                    SpeechRecognizer.ERROR_NETWORK -> "Network error"
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+                    SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "RecognitionService busy"
+                    SpeechRecognizer.ERROR_SERVER -> "Server error"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
+                    else -> "Unknown error: $error"
+                }
+                binding.statusText.text = "Error: $errorMsg"
+                showToast("Speech recognition error: $errorMsg")
+                // Remove silence timeout
+                silenceHandler.removeCallbacks(silenceRunnable)
+                // Reset toggle button
+                binding.listenToggleButton.isChecked = false
             }
 
             // Required override methods
@@ -68,8 +148,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        binding.startButton.setOnClickListener {
-            if (!isListening) {
+        binding.listenToggleButton.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
                 startListening()
             } else {
                 stopListening()
@@ -77,7 +157,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.settingsButton.setOnClickListener {
-            // TODO: Open settings activity
+            // Open SettingsActivity when the settings button is clicked
+            val intent = Intent(this, SettingsActivity::class.java)
+            startActivity(intent)
+        }
+
+        binding.usageButton.setOnClickListener {
+            val intent = Intent(this, UsageActivity::class.java)
+            startActivity(intent)
         }
     }
 
@@ -88,12 +175,18 @@ class MainActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
         speechRecognizer.startListening(intent)
+        // Start silence timeout
+        silenceHandler.postDelayed(silenceRunnable, silenceTimeoutMillis)
     }
 
     private fun stopListening() {
         speechRecognizer.stopListening()
         isListening = false
         binding.statusText.text = "Ready"
+        // Reset toggle button
+        binding.listenToggleButton.isChecked = false
+        // Remove silence timeout
+        silenceHandler.removeCallbacks(silenceRunnable)
     }
 
     private fun checkPermissions() {
@@ -133,5 +226,14 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         speechRecognizer.destroy()
+        // Unbind from the service
+        if (isServiceBound) {
+            unbindService(serviceConnection)
+            isServiceBound = false
+        }
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 } 
